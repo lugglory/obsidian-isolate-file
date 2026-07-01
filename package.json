@@ -1,6 +1,6 @@
 {
 	"name": "isolate-file",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "Move a file or folder into a chosen destination while preserving its full original vault path.",
 	"main": "main.js",
 	"scripts": {

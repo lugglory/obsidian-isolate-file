@@ -1,7 +1,7 @@
 {
 	"id": "isolate-file",
 	"name": "Isolate File",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"minAppVersion": "0.15.0",
 	"description": "Move a file or folder into a chosen destination while preserving its full original vault path, so isolated items keep track of where they came from.",
 	"author": "",
