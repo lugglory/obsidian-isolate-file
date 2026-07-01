@@ -9,7 +9,11 @@ import {
 } from "obsidian";
 
 class FolderSuggestModal extends FuzzySuggestModal<TFolder> {
-	constructor(app: App, private onChoose: (folder: TFolder) => void) {
+	constructor(
+		app: App,
+		private recentPaths: string[],
+		private onChoose: (folder: TFolder) => void
+	) {
 		super(app);
 		this.setPlaceholder("Choose a destination folder...");
 	}
@@ -23,7 +27,18 @@ class FolderSuggestModal extends FuzzySuggestModal<TFolder> {
 			}
 		};
 		collect(this.app.vault.getRoot());
-		return folders;
+
+		// Surface recently used destinations (that still exist) at the top,
+		// in most-recent-first order, when the search box is empty.
+		const byPath = new Map(folders.map((f) => [f.path, f]));
+		const recent: TFolder[] = [];
+		for (const p of this.recentPaths) {
+			const folder = byPath.get(p);
+			if (folder) recent.push(folder);
+		}
+		const recentSet = new Set(recent.map((f) => f.path));
+		const rest = folders.filter((f) => !recentSet.has(f.path));
+		return [...recent, ...rest];
 	}
 
 	getItemText(folder: TFolder): string {
@@ -107,8 +122,21 @@ async function isolateFiles(
 	}
 }
 
+const MAX_RECENT_FOLDERS = 10;
+
+interface IsolateFileData {
+	recentFolders: string[];
+}
+
 export default class IsolateFilePlugin extends Plugin {
-	onload(): void {
+	private recentFolders: string[] = [];
+
+	async onload(): Promise<void> {
+		const data = (await this.loadData()) as Partial<IsolateFileData> | null;
+		this.recentFolders = Array.isArray(data?.recentFolders)
+			? data!.recentFolders.filter((p): p is string => typeof p === "string")
+			: [];
+
 		this.addCommand({
 			id: "isolate-active-file",
 			name: "Isolate active file to folder...",
@@ -116,9 +144,9 @@ export default class IsolateFilePlugin extends Plugin {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
 				if (!checking) {
-					new FolderSuggestModal(this.app, (folder) =>
+					this.pickDestination((folder) =>
 						isolateFile(this.app, file, folder)
-					).open();
+					);
 				}
 				return true;
 			},
@@ -133,9 +161,9 @@ export default class IsolateFilePlugin extends Plugin {
 							.setTitle("Isolate to folder...")
 							.setIcon("corner-down-right")
 							.onClick(() => {
-								new FolderSuggestModal(this.app, (folder) =>
+								this.pickDestination((folder) =>
 									isolateFile(this.app, file, folder)
-								).open();
+								);
 							});
 					});
 				}
@@ -151,13 +179,28 @@ export default class IsolateFilePlugin extends Plugin {
 							.setTitle(`Isolate ${files.length} items to folder...`)
 							.setIcon("corner-down-right")
 							.onClick(() => {
-								new FolderSuggestModal(this.app, (folder) =>
+								this.pickDestination((folder) =>
 									isolateFiles(this.app, files, folder)
-								).open();
+								);
 							});
 					});
 				}
 			)
 		);
+	}
+
+	private pickDestination(onChoose: (folder: TFolder) => void): void {
+		new FolderSuggestModal(this.app, this.recentFolders, (folder) => {
+			void this.recordRecent(folder.path);
+			onChoose(folder);
+		}).open();
+	}
+
+	private async recordRecent(path: string): Promise<void> {
+		this.recentFolders = [
+			path,
+			...this.recentFolders.filter((p) => p !== path),
+		].slice(0, MAX_RECENT_FOLDERS);
+		await this.saveData({ recentFolders: this.recentFolders });
 	}
 }
