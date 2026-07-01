@@ -40,6 +40,21 @@ function isDescendantOf(path: string, ancestorPath: string): boolean {
 	return path === ancestorPath || path.startsWith(ancestorPath + "/");
 }
 
+// Obsidian's renameFile does not create missing parent folders, so we build
+// the destination folder chain ourselves before moving.
+async function ensureFolder(app: App, path: string): Promise<void> {
+	if (path === "" || app.vault.getAbstractFileByPath(path)) return;
+	const parent = path.substring(0, path.lastIndexOf("/"));
+	await ensureFolder(app, parent);
+	if (!app.vault.getAbstractFileByPath(path)) {
+		try {
+			await app.vault.createFolder(path);
+		} catch (e) {
+			// Ignore the "folder already exists" race with concurrent moves.
+		}
+	}
+}
+
 async function isolateFile(
 	app: App,
 	file: TAbstractFile,
@@ -64,6 +79,8 @@ async function isolateFile(
 	}
 
 	try {
+		const parentPath = newPath.substring(0, newPath.lastIndexOf("/"));
+		await ensureFolder(app, parentPath);
 		await app.fileManager.renameFile(file, newPath);
 		new Notice(`Isolated to "${newPath}"`);
 	} catch (e) {
