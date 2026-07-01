@@ -626,7 +626,12 @@ class IsolateFileSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl).setName("Destination vaults").setHeading();
+		new Setting(containerEl)
+			.setName("Destination vaults")
+			.setDesc(
+				"Vaults Obsidian knows about appear in the picker automatically. Add others (a vault or plain folder Obsidian doesn't list) below."
+			)
+			.setHeading();
 
 		const node = loadNode();
 		if (!node) {
@@ -636,7 +641,8 @@ class IsolateFileSettingTab extends PluginSettingTab {
 			return;
 		}
 
-		for (const vaultPath of this.plugin.settings.destinationVaults) {
+		const manual = this.plugin.settings.destinationVaults;
+		for (const vaultPath of manual) {
 			new Setting(containerEl)
 				.setName(node.path.basename(vaultPath))
 				.setDesc(vaultPath)
@@ -645,10 +651,9 @@ class IsolateFileSettingTab extends PluginSettingTab {
 						.setIcon("trash")
 						.setTooltip("Remove")
 						.onClick(async () => {
-							this.plugin.settings.destinationVaults =
-								this.plugin.settings.destinationVaults.filter(
-									(p) => p !== vaultPath
-								);
+							this.plugin.settings.destinationVaults = manual.filter(
+								(p) => p !== vaultPath
+							);
 							await this.plugin.saveSettings();
 							this.display();
 						})
@@ -657,8 +662,8 @@ class IsolateFileSettingTab extends PluginSettingTab {
 
 		let inputPath = "";
 		new Setting(containerEl)
-			.setName("Add a destination vault")
-			.setDesc("Absolute path to another vault's folder.")
+			.setName("Add a vault manually")
+			.setDesc("Absolute path to a vault or folder Obsidian doesn't list.")
 			.addText((t) =>
 				t
 					.setPlaceholder("D:\\vaults\\secure-vault")
@@ -676,44 +681,12 @@ class IsolateFileSettingTab extends PluginSettingTab {
 							);
 							return;
 						}
-						if (!this.plugin.settings.destinationVaults.includes(inputPath)) {
-							this.plugin.settings.destinationVaults.push(inputPath);
+						if (!manual.includes(inputPath)) {
+							manual.push(inputPath);
 							await this.plugin.saveSettings();
 						}
 						this.display();
 					})
-			);
-
-		new Setting(containerEl)
-			.setName("Import from Obsidian's vault list")
-			.setDesc(
-				"Auto-add other vaults Obsidian knows about. Uses an undocumented file; if it can't be read, nothing changes."
-			)
-			.addButton((b) =>
-				b.setButtonText("Import").onClick(async () => {
-					const adapter = this.app.vault.adapter;
-					const base =
-						adapter instanceof FileSystemAdapter ? adapter.getBasePath() : "";
-					const current = node.path.resolve(base).toLowerCase();
-					let added = 0;
-					for (const v of readRegisteredVaults(node)) {
-						if (
-							isVaultDir(node, v.path) &&
-							node.path.resolve(v.path).toLowerCase() !== current &&
-							!this.plugin.settings.destinationVaults.includes(v.path)
-						) {
-							this.plugin.settings.destinationVaults.push(v.path);
-							added++;
-						}
-					}
-					await this.plugin.saveSettings();
-					new Notice(
-						added > 0
-							? `Imported ${added} vault(s).`
-							: "No new vaults found to import."
-					);
-					this.display();
-				})
 			);
 	}
 }
